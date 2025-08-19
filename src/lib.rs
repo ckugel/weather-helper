@@ -52,6 +52,8 @@ pub struct DayTemp {
     pub date: NaiveDate,
     pub tmax: f64,
     pub tmin: f64,
+    pub tmax_f: f64,
+    pub tmin_f: f64,
 }
 
 /// Summary of the dataset for presentation.
@@ -61,6 +63,9 @@ pub struct Summary {
     pub min: String,
     pub note: String,
 }
+
+/// 9/5 AKA celsius conversion rate
+const CONVERSION_RATE_CF: f64 = 9.0 / 5.0;
 
 /// Gets the url for the geocode
 fn geocode_base() -> String {
@@ -77,6 +82,11 @@ fn forecast_base() -> String {
 fn archive_base() -> String {
     env::var("OPEN_METEO_ARCHIVE_BASE")
         .unwrap_or_else(|_| "https://archive-api.open-meteo.com/v1".to_string())
+}
+
+/// Helper function that takes in celsius and returns fahrenheit
+fn celcius_to_farenheit(temp_c: f64) -> f64 {
+    return temp_c * CONVERSION_RATE_CF + 32.0;
 }
 
 async fn get_json_with_retry<T: DeserializeOwned>(url: &str) -> Result<T> {
@@ -168,9 +178,9 @@ pub fn extract_meta(path: &Path) -> Result<NoteMeta> {
 
     let yaml: YamlValue = serde_yaml::from_str(yaml_str)?;
     let city = yaml
-        .get("city")
+        .get("city-place")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("missing 'city'"))?
+        .ok_or_else(|| anyhow!("missing 'city-place'"))?
         .trim()
         .to_string();
 
@@ -235,17 +245,16 @@ pub async fn process_note(meta: &NoteMeta) -> Result<()> {
 
 /// Insert or replace the weather block under the designated heading.
 pub fn upsert_weather_block(content: &mut String, new_block: &str) -> Result<()> {
-    let heading_re = Regex::new(r"(?m)^##\s*Weather Forecast\s*$").unwrap();
-    let block_re = Regex::new(
-        "(?s)^##\\s*Weather Forecast\\s*\n<!-- WEATHER:BEGIN -->.*?<!-- WEATHER:END -->",
-    )
-    .unwrap();
+    let block_re =
+        Regex::new("(?s)##\\s*Weather Forecast\\s*\n<!-- WEATHER:BEGIN -->.*?<!-- WEATHER:END -->")
+            .unwrap();
 
     if block_re.is_match(content) {
         *content = block_re.replace(content, new_block).to_string();
         return Ok(());
     }
 
+    let heading_re = Regex::new(r"(?m)^##\s*Weather Forecast\s*$").unwrap();
     if heading_re.is_match(content) {
         *content = heading_re
             .replace(
@@ -275,19 +284,19 @@ pub fn summarize(data: &[DayTemp]) -> Summary {
             note: "_No data returned_".into(),
         };
     }
-    let max = data.iter().fold(f64::MIN, |m, d| m.max(d.tmax));
-    let min = data.iter().fold(f64::MAX, |m, d| m.min(d.tmin));
+    let max = data.iter().fold(f64::MIN, |m, d| m.max(d.tmax_f));
+    let min = data.iter().fold(f64::MAX, |m, d| m.min(d.tmin_f));
     let note = format!(
         "_{} days • High range {:.0}° → {:.0}° • Low range {:.0}° → {:.0}°_",
         data.len(),
-        data.iter().map(|d| d.tmax).fold(f64::MAX, f64::min),
-        data.iter().map(|d| d.tmax).fold(f64::MIN, f64::max),
-        data.iter().map(|d| d.tmin).fold(f64::MAX, f64::min),
-        data.iter().map(|d| d.tmin).fold(f64::MIN, f64::max),
+        data.iter().map(|d| d.tmax_f).fold(f64::MAX, f64::min),
+        data.iter().map(|d| d.tmax_f).fold(f64::MIN, f64::max),
+        data.iter().map(|d| d.tmin_f).fold(f64::MAX, f64::min),
+        data.iter().map(|d| d.tmin_f).fold(f64::MIN, f64::max),
     );
     Summary {
-        max: format!("{:.0}°C", max),
-        min: format!("{:.0}°C", min),
+        max: format!("{:.0}°F", max),
+        min: format!("{:.0}°F", min),
         note,
     }
 }
@@ -297,9 +306,14 @@ pub fn render_table(data: &[DayTemp]) -> String {
     if data.is_empty() {
         return "_(no rows)_".into();
     }
-    let mut s = String::from("| Date | High (°C) | Low (°C) |\n|---|---:|---:|\n");
+    let mut s = String::from(
+        "| Date | High (°F) | Low (°F) | High (°C) | Low (°C) |\n|---|---:|---:|---:|---:|\n",
+    );
     for d in data {
-        s.push_str(&format!("| {} | {:.0} | {:.0} |\n", d.date, d.tmax, d.tmin));
+        s.push_str(&format!(
+            "| {} | {:.0} | {:.0} | {:.0} | {:.0} |\n",
+            d.date, d.tmax_f, d.tmin_f, d.tmax, d.tmin
+        ));
     }
     s
 }
@@ -384,7 +398,15 @@ pub fn parse_daily(api: ForecastResp) -> Result<Vec<DayTemp>> {
         let date = NaiveDate::parse_from_str(&d.time[i], "%Y-%m-%d")?;
         let tmax = d.temperature_2m_max[i];
         let tmin = d.temperature_2m_min[i];
-        out.push(DayTemp { date, tmax, tmin });
+        let tmax_f: f64 = celcius_to_farenheit(tmax);
+        let tmin_f: f64 = celcius_to_farenheit(tmin);
+        out.push(DayTemp {
+            date,
+            tmax,
+            tmin,
+            tmax_f,
+            tmin_f,
+        });
     }
     Ok(out)
 }
