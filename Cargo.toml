@@ -1,0 +1,20 @@
+# Weather Helper: A CLI tool for updating Markdown packing notes with weather forecasts for Italian cities.
+# See README for usage and documentation.
+
+[package]
+name = "weather-helper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+reqwest = { version = "0.12", features = ["json", "brotli", "gzip", "zstd", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+walkdir = "2"
+tokio = { version = "1", features = ["full"] }
+mockito = "1"
+urlencoding = "2.1.3"
