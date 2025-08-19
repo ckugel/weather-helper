@@ -8,10 +8,15 @@
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{Datelike, Duration, Local, NaiveDate};
+use plotters::prelude::{
+    BLACK, BLUE, BitMapBackend, ChartBuilder, IntoDrawingArea, LineSeries, PathElement, RED, WHITE,
+};
+use plotters::style::Color;
 use regex::Regex;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
+use std::cmp;
 use std::{env, fs, path::Path};
 
 /// Metadata extracted from a note's YAML frontmatter.
@@ -66,6 +71,10 @@ pub struct Summary {
 
 /// 9/5 AKA celsius conversion rate
 const CONVERSION_RATE_CF: f64 = 9.0 / 5.0;
+
+/// The height for images TODO: make configurable in the future
+const IMAGE_WIDTH: u32 = 640;
+const IMAGE_HEIGHT: u32 = 320;
 
 /// Gets the url for the geocode
 fn geocode_base() -> String {
@@ -240,6 +249,7 @@ pub async fn process_note(meta: &NoteMeta) -> Result<()> {
     let mut content = fs::read_to_string(&meta.path)?;
     upsert_weather_block(&mut content, &block)?;
     fs::write(&meta.path, content)?;
+    save_chart(&data, &meta.path)?;
     Ok(())
 }
 
@@ -409,4 +419,66 @@ pub fn parse_daily(api: ForecastResp) -> Result<Vec<DayTemp>> {
         });
     }
     Ok(out)
+}
+
+/// Saves an image of a chart from the data. Will be saved with the same name as the md file
+/// in the same location with the same name except -forecast.png
+pub fn save_chart(data: &[DayTemp], md_path: &str) -> Result<()> {
+    if data.is_empty() {
+        return Ok(());
+    }
+    // save file path
+    let out_path = {
+        let p = Path::new(md_path);
+        let stem = p.file_stem().unwrap_or_default().to_string_lossy();
+        let parent = p.parent().unwrap_or_else(|| Path::new(""));
+        parent.join(format!("{stem}-forecast.png"))
+    };
+    // Make an image with configured dimensions
+    let root = BitMapBackend::new(&out_path, (IMAGE_WIDTH, IMAGE_HEIGHT)).into_drawing_area();
+    root.fill(&WHITE)?;
+    let dates: Vec<_> = data.iter().map(|d| d.date).collect();
+    let highs: Vec<_> = data.iter().map(|d| d.tmax_f).collect();
+    let lows: Vec<_> = data.iter().map(|d| d.tmin_f).collect();
+    let min_temp = lows.iter().cloned().fold(f64::INFINITY, f64::min).floor();
+    let max_temp = highs
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max)
+        .ceil();
+    let mut chart = ChartBuilder::on(&root)
+        .caption("Highs & Lows (°F)", ("sans-serif", 20))
+        .margin(25)
+        .x_label_area_size(40)
+        .y_label_area_size(20)
+        .build_cartesian_2d(dates[0]..dates[dates.len() - 1], min_temp..max_temp)?;
+    chart
+        .configure_mesh()
+        .x_labels(dates.len())
+        .y_desc("°F")
+        .x_desc("Date")
+        .label_style(("sans-serif", 10))
+        .x_label_formatter(&|d| format!("{} ({})", d.format("%Y-%m-%d"), d.weekday()))
+        .draw()?;
+    chart
+        .draw_series(LineSeries::new(
+            dates.iter().zip(highs.iter()).map(|(d, t)| (*d, *t)),
+            &RED,
+        ))?
+        .label("High")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 10, y)], &RED));
+    chart
+        .draw_series(LineSeries::new(
+            dates.iter().zip(lows.iter()).map(|(d, t)| (*d, *t)),
+            &BLUE,
+        ))?
+        .label("Low")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 10, y)], &BLUE));
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .label_font(("sans-serif", 14))
+        .draw()?;
+    Ok(())
 }

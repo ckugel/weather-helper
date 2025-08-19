@@ -18,6 +18,7 @@
             pkgs.clippy
             pkgs.openssl
             pkgs.pkg-config
+            pkgs.fontconfig
           ];
         };
       });
