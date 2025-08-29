@@ -16,7 +16,6 @@ use regex::Regex;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
-use std::cmp;
 use std::{env, fs, path::Path};
 
 /// Metadata extracted from a note's YAML frontmatter.
@@ -192,6 +191,17 @@ pub fn extract_meta(path: &Path) -> Result<NoteMeta> {
         .ok_or_else(|| anyhow!("missing 'city-place'"))?
         .trim()
         .to_string();
+
+    let duration = yaml
+        .get("estimated-days")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("missing 'city-place'"))?
+        .trim()
+        .to_string();
+
+    if duration.contains("-1") {
+        return Err(anyhow!("duration is -1, skipping entry"));
+    }
 
     let arrival_str = yaml
         .get("arrival")

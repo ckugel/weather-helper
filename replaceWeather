@@ -1,0 +1,2 @@
+cargo build -r
+cp ./target/release/weather-helper ../../notes/Study\ abroad/
