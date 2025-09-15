@@ -21,7 +21,8 @@ fn extract_meta_ok_and_errors() {
     let path_ok = write_temp_file(
         "meta_ok.md",
         r#"---
-city: Rome
+city_place: Rome
+estimated-days: 5
 arrival: 2025-08-20
 departure: 2025-08-25
 ---
@@ -38,7 +39,7 @@ departure: 2025-08-25
     let path_missing = write_temp_file(
         "meta_missing.md",
         r#"---
-city: Rome
+city_place: Rome
 ---
 "#,
     );

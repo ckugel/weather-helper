@@ -41,16 +41,20 @@ fn summarize_formats() {
             date: NaiveDate::parse_from_str("2025-01-01", "%Y-%m-%d").unwrap(),
             tmax: 10.0,
             tmin: 0.0,
+            tmax_f: 52.0,
+            tmin_f: 32.0,
         },
         DayTemp {
             date: NaiveDate::parse_from_str("2025-01-02", "%Y-%m-%d").unwrap(),
             tmax: 12.0,
             tmin: 1.0,
+            tmax_f: 56.0,
+            tmin_f: 3.0,
         },
     ];
     let s: Summary = summarize(&data);
-    assert_eq!(s.max, "12°C");
-    assert_eq!(s.min, "0°C");
+    assert_eq!(s.max, "56°F");
+    assert_eq!(s.min, "3°F");
     assert!(s.note.contains("2 days"));
 }
 
@@ -61,14 +65,18 @@ fn render_table_outputs_rows() {
             date: NaiveDate::parse_from_str("2025-01-01", "%Y-%m-%d").unwrap(),
             tmax: 10.0,
             tmin: 0.0,
+            tmax_f: 52.0,
+            tmin_f: 32.0,
         },
         DayTemp {
             date: NaiveDate::parse_from_str("2025-01-02", "%Y-%m-%d").unwrap(),
             tmax: 12.0,
             tmin: 1.0,
+            tmax_f: 56.0,
+            tmin_f: 3.0,
         },
     ];
     let table = render_table(&data);
-    assert!(table.contains("| 2025-01-01 | 10 | 0 |"));
-    assert!(table.contains("| 2025-01-02 | 12 | 1 |"));
+    assert!(table.contains("| 2025-01-01 | 52 | 32 |"));
+    assert!(table.contains("| 2025-01-02 | 56 | 3 |"));
 }

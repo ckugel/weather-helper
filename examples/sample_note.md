@@ -1,5 +1,5 @@
 ---
-city-place: Rome
+city_place: Rome
 arrival: 2025-08-20
 departure: 2025-08-25
 ---
